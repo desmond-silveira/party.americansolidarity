@@ -8,6 +8,10 @@
 
 package dsilveira;
 
+import static dsilveira.Utils.getIntersectionSize;
+import static dsilveira.Utils.harmonic;
+import static dsilveira.Utils.sortDescByValue;
+
 import java.io.IOException;
 import java.lang.System.Logger.Level;
 import java.nio.file.Files;
@@ -16,14 +20,11 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -64,7 +65,8 @@ import me.tongfei.progressbar.ProgressBar;
  */
 public class BallotCounter {
 
-  private static final System.Logger LOGGER = System.getLogger(BallotCounter.class.getName());
+  private static final System.Logger LOGGER =
+      System.getLogger(BallotCounter.class.getName());
   private static final int MIN_COMBO_COUNT_FOR_PROGRESS_BAR = 3000;
 
   /**
@@ -75,7 +77,8 @@ public class BallotCounter {
    */
   public static void main(String[] args) {
     if (args.length < 1) {
-      System.out.println("Usage:  BallotCounter <filepath> [seat_count] [max_proportional_slates]");
+      System.out.println(
+          "Usage:  BallotCounter <filepath> [seat_count] [max_proportional_slates]");
       System.exit(1);
     }
     List<Set<Candidate>> ballots = null;
@@ -96,7 +99,7 @@ public class BallotCounter {
       maxProportionalSlates = Integer.parseInt(args[2]);
     }
 
-    Map<Candidate, Integer> approvalCounts = countApproval(ballots);
+    Map<Candidate, Integer> approvalCounts = countAV(ballots);
     Candidate.setCounts(approvalCounts);
 
     int nameFieldLength = Math.max(Candidate.maxLength(), 31);
@@ -110,21 +113,21 @@ public class BallotCounter {
 
     System.out.println("\nNET APPROVAL VOTING");
     System.out.println("=======================================");
-    for (Entry<Candidate, Integer> candidateResult : sortDescByValue(countNetApproval(ballots))) {
+    for (Entry<Candidate, Integer> candidateResult : sortDescByValue(countNetAV(ballots))) {
       System.out.format("%1$-" + nameFieldLength + "s%2$8d\n",
           candidateResult.getKey().getName(), candidateResult.getValue());
     }
 
     System.out.println("\nSATISFACTION APPROVAL VOTING");
     System.out.println("=======================================");
-    for (Entry<Candidate, Double> candidateResult : sortDescByValue(countSatisfactionApproval(ballots))) {
+    for (Entry<Candidate, Double> candidateResult : sortDescByValue(countSAV(ballots))) {
       System.out.format("%1$-" + nameFieldLength + "s%2$8.3f\n",
           candidateResult.getKey().getName(), candidateResult.getValue());
     }
 
     System.out.println("\nSEQUENTIAL PROPORTIONAL APPROVAL VOTING");
     System.out.println("=======================================");
-    Map<Candidate, Double> spavResults = countSeqentialProportionalApproval(ballots);
+    Map<Candidate, Double> spavResults = countSPAV(ballots);
     LOGGER.log(Level.TRACE, "Final Results");
     LOGGER.log(Level.TRACE, "-------------");
     for (Entry<Candidate, Double> candidateResult : sortDescByValue(spavResults)) {
@@ -134,7 +137,7 @@ public class BallotCounter {
 
     System.out.println("\nPROPORTIONAL APPROVAL VOTING");
     System.out.println("=======================================");
-    Map<Set<Candidate>, Double> pavResults = countProportionalApproval(ballots, seatCount);
+    Map<Set<Candidate>, Double> pavResults = countPAV(ballots, seatCount);
     LOGGER.log(Level.TRACE, "Final Results");
     LOGGER.log(Level.TRACE, "-------------");
     for (ListIterator<Entry<Set<Candidate>, Double>> iter =
@@ -152,7 +155,7 @@ public class BallotCounter {
    * @param ballots the {@code List} of ballots
    * @return the {@code Map} of {@code Candidate}s to votes
    */
-  private static Map<Candidate, Integer> countApproval(List<Set<Candidate>> ballots) {
+  private static Map<Candidate, Integer> countAV(List<Set<Candidate>> ballots) {
     Map<Candidate, Integer> results = new HashMap<>();
     for (Set<Candidate> ballot : ballots) {
       if (!ballot.isEmpty()) {
@@ -170,7 +173,7 @@ public class BallotCounter {
    * @param ballots the {@code List} of ballots
    * @return the {@code Map} of {@code Candidate}s to votes
    */
-  private static Map<Candidate, Integer> countNetApproval(List<Set<Candidate>> ballots) {
+  private static Map<Candidate, Integer> countNetAV(List<Set<Candidate>> ballots) {
     Map<Candidate, Integer> results = new HashMap<>();
     for (Set<Candidate> ballot : ballots) {
       if (!ballot.isEmpty()) {
@@ -185,12 +188,30 @@ public class BallotCounter {
   }
 
   /**
+   * Counts votes and returns satisfaction approval voting scores.
+   *
+   * @param ballots the {@code List} of ballots
+   * @return the {@code Map} of {@code Candidate}s to scores
+   */
+  private static Map<Candidate, Double> countSAV(List<Set<Candidate>> ballots) {
+    Map<Candidate, Double> results = new HashMap<>();
+    for (Set<Candidate> ballot : ballots) {
+      if (!ballot.isEmpty()) {
+        for (Candidate c : ballot) {
+          results.put(c, results.getOrDefault(c, 0.0) + 1.0 / ballot.size());
+        }
+      }
+    }
+    return results;
+  }
+
+  /**
    * Counts votes and returns sequential proportional approval voting scores.
    *
    * @param ballots the {@code List} of ballots
    * @return the {@code Map} of {@code Candidate}s to scores
    */
-  private static Map<Candidate, Double> countSeqentialProportionalApproval(
+  private static Map<Candidate, Double> countSPAV(
       List<Set<Candidate>> ballots) {
     Map<Candidate, Double> results = new HashMap<>();
     for (int round = 1; round <= Candidate.count(); round++) {
@@ -210,8 +231,7 @@ public class BallotCounter {
       if (roundResults.isEmpty()) {
         break;
       }
-      Set<Entry<Candidate, Double>> sortedResults =
-          sortDescByValue(roundResults);
+      Set<Entry<Candidate, Double>> sortedResults = sortDescByValue(roundResults);
       if (LOGGER.isLoggable(Level.TRACE)) {
         for (Entry<Candidate, Double> entry : sortedResults) {
           LOGGER.log(Level.TRACE, "{0} {1}", entry.getKey().getName(),
@@ -241,7 +261,7 @@ public class BallotCounter {
    * @param ballots the {@code List} of ballots
    * @return the {@code Map} of {@code Candidate}s to scores
    */
-  private static Map<Set<Candidate>, Double> countProportionalApproval(
+  private static Map<Set<Candidate>, Double> countPAV(
       List<Set<Candidate>> ballots, int seatCount) {
     long comboCount = CombinatoricsUtils.binomialCoefficient(Candidate.count(), seatCount);
     int mapCapacity = Integer.MAX_VALUE;
@@ -266,37 +286,6 @@ public class BallotCounter {
       }
     }
     return results;
-  }
-
-  /**
-   * Counts votes and returns satisfaction approval voting scores.
-   *
-   * @param ballots the {@code List} of ballots
-   * @return the {@code Map} of {@code Candidate}s to scores
-   */
-  private static Map<Candidate, Double> countSatisfactionApproval(List<Set<Candidate>> ballots) {
-    Map<Candidate, Double> results = new HashMap<>();
-    for (Set<Candidate> ballot : ballots) {
-      if (!ballot.isEmpty()) {
-        for (Candidate c : ballot) {
-          results.put(c, results.getOrDefault(c, 0.0) + 1.0 / ballot.size());
-        }
-      }
-    }
-    return results;
-  }
-
-  /**
-   * Returns the size of the intersection between two sets.
-   *
-   * @param set1 {@code Set} 1
-   * @param set2 {@code Set} 2
-   * @return the size of the intersection
-   */
-  private static int getIntersectionSize(Set<?> set1, Set<?> set2) {
-    Set<?> intersection = new HashSet<>(set1);
-    intersection.retainAll(set2);
-    return intersection.size();
   }
 
   /**
@@ -326,38 +315,4 @@ public class BallotCounter {
     }
     return ballot;
   };
-
-  /**
-   * Sorts a {@code Map} by value and returns the sorted {@code Entry}s.
-   * @param map the {@code Map}
-   * @return the sorted {@code Entry}s
-   */
-  static <K, V extends Comparable<? super V>> Set<Entry<K, V>> sortDescByValue(Map<K, V> map) {
-    return map.entrySet().stream()
-        .sorted(Entry.<K, V>comparingByValue().reversed())
-        .collect(Collectors.toMap(Entry::getKey, Entry::getValue, (e1, e2) -> e1, LinkedHashMap::new))
-        .entrySet();
-  }
-
-  /**
-   * Sorts a {@code Set} by values and returns the {@code SortedSet}.
-   * @param map the {@code Map}
-   * @return the sorted {@code Entry}s
-   */
-  static <K> SortedSet<K> sortDescByValue(Set<K> set) {
-    TreeSet<K> sortedSet = new TreeSet<K>();
-    sortedSet.addAll(set);
-    return sortedSet;
-  }
-
-  static double harmonic(int n) {
-    if (n < 1) {
-      throw new IllegalArgumentException("The value of n must be positive for harmonic series.  n: " + n);
-    }
-    double sum = 0;
-    for (int i = 1; i <= n; i++) {
-      sum += 1.0 / i;
-    }
-    return sum;
-  }
 }
