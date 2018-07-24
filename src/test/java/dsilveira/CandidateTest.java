@@ -3,9 +3,12 @@
  */
 package dsilveira;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -74,5 +77,26 @@ class CandidateTest {
     assertEquals(a, iter.next());
     assertEquals(f, iter.next());
     assertEquals(c, iter.next());
+  }
+
+  @Test
+  void testAll() {
+    new Candidate(4, "d");
+    new Candidate(-2, "b");
+    new Candidate(-1, "c");
+    new Candidate(0, "e");
+
+    Collection<Candidate> candidates = Candidate.all();
+    assertEquals(4, candidates.size());
+
+    new Candidate(1, "d");
+    new Candidate(2, "f");
+    assertEquals(6, candidates.size());
+
+    assertThrows(RuntimeException.class, () -> {
+      candidates.add(new Candidate(-3, "d"));
+    });
+
+    assertEquals(7, candidates.size());
   }
 }

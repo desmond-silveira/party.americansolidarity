@@ -18,6 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -25,6 +26,8 @@ import java.util.ListIterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -104,7 +107,7 @@ public class BallotCounter {
 
     int nameFieldLength = Math.max(Candidate.maxLength(), 31);
 
-    System.out.println("APPROVAL VOTING");
+    System.out.println("\nAPPROVAL VOTING");
     System.out.println("=======================================");
     for (Entry<Candidate, Integer> candidateResult : sortDescByValue(approvalCounts)) {
       System.out.format("%1$-" + nameFieldLength + "s%2$8d\n",
@@ -125,12 +128,33 @@ public class BallotCounter {
           candidateResult.getKey().getName(), candidateResult.getValue());
     }
 
+    System.out.println("\nSINGLE TRANSFERABLE VOTE (simulated)");
+    System.out.println("=======================================");
+    List<SortedSet<Candidate>> stvBallots = simulateRankedVoting(ballots);
+    List<Candidate> stvResults = countSTV(stvBallots, seatCount);
+    System.out.println("Final Results");
+    System.out.println("-------------");
+    for (Candidate candidate : stvResults) {
+      System.out.format("%1$-" + nameFieldLength + "s\n", candidate.getName());
+    }
+
+
     System.out.println("\nSEQUENTIAL PROPORTIONAL APPROVAL VOTING");
     System.out.println("=======================================");
     Map<Candidate, Double> spavResults = countSPAV(ballots);
     LOGGER.log(Level.TRACE, "Final Results");
     LOGGER.log(Level.TRACE, "-------------");
     for (Entry<Candidate, Double> candidateResult : sortDescByValue(spavResults)) {
+      System.out.format("%1$-" + nameFieldLength + "s%2$8.3f\n",
+          candidateResult.getKey().getName(), candidateResult.getValue());
+    }
+
+    System.out.println("\nSILVEIRA SEQUENTIAL PROPORTIONAL APPROVAL VOTING");
+    System.out.println("=======================================");
+    Map<Candidate, Double> sspavResults = countSSPAV(ballots, seatCount);
+    LOGGER.log(Level.TRACE, "Final Results");
+    LOGGER.log(Level.TRACE, "-------------");
+    for (Entry<Candidate, Double> candidateResult : sortDescByValue(sspavResults)) {
       System.out.format("%1$-" + nameFieldLength + "s%2$8.3f\n",
           candidateResult.getKey().getName(), candidateResult.getValue());
     }
@@ -145,7 +169,7 @@ public class BallotCounter {
         iter.hasNext() && iter.nextIndex() < maxProportionalSlates;) {
       Entry<Set<Candidate>, Double> slateResult = iter.next();
       System.out.format("%1$-" + (Candidate.maxLength() * seatCount) + "s%2$8.3f\n",
-          sortDescByValue(slateResult.getKey()), slateResult.getValue());
+          new TreeSet<>(slateResult.getKey()), slateResult.getValue());
     }
   }
 
@@ -155,7 +179,7 @@ public class BallotCounter {
    * @param ballots the {@code List} of ballots
    * @return the {@code Map} of {@code Candidate}s to votes
    */
-  private static Map<Candidate, Integer> countAV(List<Set<Candidate>> ballots) {
+  private static Map<Candidate, Integer> countAV(List<? extends Set<Candidate>> ballots) {
     Map<Candidate, Integer> results = new HashMap<>();
     for (Set<Candidate> ballot : ballots) {
       if (!ballot.isEmpty()) {
@@ -177,8 +201,7 @@ public class BallotCounter {
     Map<Candidate, Integer> results = new HashMap<>();
     for (Set<Candidate> ballot : ballots) {
       if (!ballot.isEmpty()) {
-        for (int i = 0; i < Candidate.count(); i++) {
-          Candidate c = Candidate.fromValue(i);
+        for (Candidate c : Candidate.all()) {
           int points = ballot.contains(c) ? 1 : -1;
           results.put(c, results.getOrDefault(c, 0) + points);
         }
@@ -205,6 +228,162 @@ public class BallotCounter {
     return results;
   }
 
+  private static List<SortedSet<Candidate>> simulateRankedVoting(
+      List<Set<Candidate>> ballots) {
+    List<SortedSet<Candidate>> results = new ArrayList<>(ballots.size());
+    for (Set<Candidate> ballot : ballots) {
+      results.add(new TreeSet<Candidate>(ballot));
+    }
+    return results;
+  }
+
+  /**
+   * Counts votes and returns the single transferable voting winners.
+   * <p/>
+   * This uses the more popular Droop Quota, favoring larger parties, over the
+   * Hare quota that favors smaller parties.
+   *
+   * @param ballots
+   * @param seatCount
+   * @return
+   */
+  private static List<Candidate> countSTV(List<SortedSet<Candidate>> ballots,
+      int seatCount) {
+    final int droopQuota = (int) Math.floor(((double) ballots.size()) / (seatCount + 1)) + 1;
+    System.out.format("Droop quota: %1$d\n", droopQuota);
+    List<Candidate> elected = new ArrayList<>(seatCount);
+    Set<Candidate> excluded = new HashSet<>(Candidate.count() - seatCount);
+    Map<Candidate, Integer> votes = countFirstChoiceVotes(ballots);
+    System.out.print("First preferences: ");
+    for (Entry<Candidate, Integer> entry : sortDescByValue(votes)) {
+      System.out.format("%1$s: %2$d; ", entry.getKey().getLastName(), entry.getValue());
+    }
+    System.out.println();
+    Map<Candidate, Integer> approvalCounts = countAV(ballots);
+    while (elected.size() < seatCount) {
+      List<Entry<Candidate, Integer>> sorted = new ArrayList<>(sortDescByValue(votes));
+      Map<Candidate, Integer> nextChoices = null;
+      double multiplier = 0;
+      List<Candidate> qualified = getQualifiedCandidates(sorted, droopQuota);
+      elected.addAll(qualified);
+      if (!qualified.isEmpty()) {
+        for (Candidate candidate : qualified) {
+          System.out.format("Seat %1$s, %2$d; ", candidate.getLastName(), votes.get(candidate));
+          int redistributionVotes = votes.get(candidate) - droopQuota;
+          if (redistributionVotes > 0) {
+            System.out.format("Redistribute %1$d votes; ", redistributionVotes);
+            nextChoices = getNextChoices(ballots, elected, excluded, candidate);
+            // Redistribution via the Wright system
+            multiplier = getSeatedMultiplier(approvalCounts, candidate, redistributionVotes);
+            redistributeVotes(votes, candidate, nextChoices, multiplier);
+          }
+          System.out.println();
+          votes.remove(candidate);
+        }
+      } else {
+        Entry<Candidate, Integer> lowest = sorted.get(sorted.size() - 1);
+        Candidate candidate = lowest.getKey();
+        System.out.format("Eliminate %1$s, %2$d; ", candidate.getLastName(), votes.get(candidate));
+        excluded.add(candidate);
+        int redistributionVotes = lowest.getValue();
+        if (redistributionVotes > 0) {
+          System.out.format("Redistribute %1$d votes; ", redistributionVotes);
+          nextChoices = getNextChoices(ballots, elected, excluded, candidate);
+          multiplier = getEliminatedMultiplier(lowest, nextChoices);
+          redistributeVotes(votes, candidate, nextChoices, multiplier);
+        }
+        System.out.println();
+        votes.remove(candidate);
+      }
+    }
+
+    return elected;
+  }
+
+  /**
+   * For all {@code Candidate}s
+   * @param ballots
+   * @param seated
+   * @return
+   */
+  private static Map<Candidate, Integer> countFirstChoiceVotes(
+      List<SortedSet<Candidate>> ballots) {
+    Map<Candidate, Integer> votes = new HashMap<>(Candidate.count());
+    for (SortedSet<Candidate> ballot : ballots) {
+      if (!ballot.isEmpty()) {
+        Candidate candidate = ballot.first();
+        votes.put(ballot.first(), votes.getOrDefault(candidate, 0) + 1);
+      }
+    }
+    // Add any candidates that didn't get any first choice votes.
+    for (Candidate candidate : Candidate.all()) {
+      if (!votes.containsKey(candidate)) {
+        votes.put(candidate, 0);
+      }
+    }
+    return votes;
+  }
+
+  private static List<Candidate> getQualifiedCandidates(
+      List<Entry<Candidate, Integer>> sorted, int quota) {
+    List<Candidate> qualified = new ArrayList<>();
+    for (Entry<Candidate, Integer> entry : sorted) {
+      if (entry.getValue() > quota) {
+        qualified.add(entry.getKey());
+      }
+    }
+    return qualified;
+  }
+
+  private static Map<Candidate, Integer> getNextChoices(
+      List<SortedSet<Candidate>> ballots, Collection<Candidate> seated,
+      Collection<Candidate> eliminated, Candidate candidate) {
+    Map<Candidate, Integer> nextChoices = new HashMap<>(Candidate.count());
+    for (SortedSet<Candidate> ballot : ballots) {
+      boolean candidateFound = false;
+      for (Candidate c : ballot) {
+        if (candidateFound && !seated.contains(c) && !eliminated.contains(c)) {
+          nextChoices.put(c, nextChoices.getOrDefault(c, 0) + 1);
+          break;
+        } else if (c.equals(candidate)) {
+          candidateFound = true;
+          continue;
+        } else if (seated.contains(c) || eliminated.contains(c)) {
+          continue;
+        }
+        break;
+      }
+    }
+    return nextChoices;
+  }
+
+  private static double getSeatedMultiplier(Map<Candidate, Integer> approvalCounts,
+      Candidate candidate, int redistributionVotes) {
+    return ((double) redistributionVotes) / approvalCounts.get(candidate);
+  }
+
+  private static double getEliminatedMultiplier(Entry<Candidate, Integer> lowest,
+      Map<Candidate, Integer> nextChoices) {
+    int sumOfNextChoiceVotes = 0;
+    for (Entry<Candidate, Integer> nextChoice : nextChoices.entrySet()) {
+      sumOfNextChoiceVotes += nextChoice.getValue();
+    }
+    return ((double) lowest.getValue()) / sumOfNextChoiceVotes;
+  }
+
+  private static void redistributeVotes(Map<Candidate, Integer> votes,
+      Candidate candidate, Map<Candidate, Integer> nextChoices, double multiplier) {
+    for (Entry<Candidate, Integer> nextChoice : nextChoices.entrySet()) {
+      int redistribution = (int) Math.round(nextChoice.getValue() * multiplier);
+      int current = votes.getOrDefault(nextChoice.getKey(), 0);
+      int total = redistribution + current;
+      System.out.format("%1$s: %2$d%3$+d=%4$d; ", nextChoice.getKey().getLastName(),
+          votes.getOrDefault(nextChoice.getKey(), 0), redistribution, total);
+      votes.put(candidate, votes.get(candidate) - redistribution);
+      votes.put(nextChoice.getKey(), total);
+    }
+  }
+
   /**
    * Counts votes and returns sequential proportional approval voting scores.
    *
@@ -224,6 +403,56 @@ public class BallotCounter {
             if (!results.containsKey(c)) {
               roundResults.put(c,
                   roundResults.getOrDefault(c, 0.0) + 1.0 / (1.0 + count));
+            }
+          }
+        }
+      }
+      if (roundResults.isEmpty()) {
+        break;
+      }
+      Set<Entry<Candidate, Double>> sortedResults = sortDescByValue(roundResults);
+      if (LOGGER.isLoggable(Level.TRACE)) {
+        for (Entry<Candidate, Double> entry : sortedResults) {
+          LOGGER.log(Level.TRACE, "{0} {1}", entry.getKey().getName(),
+              entry.getValue());
+        }
+      }
+      // Seat the winner (or winners if there is a tie) of the round.
+      double topRoundScore = 0;
+      for (Entry<Candidate, Double> nextTop : sortedResults) {
+        if (topRoundScore == 0) {
+          topRoundScore = nextTop.getValue();
+        }
+        if (nextTop.getValue() == topRoundScore) {
+          results.put(nextTop.getKey(), nextTop.getValue());
+        } else {
+          break;
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Counts votes and returns sequential proportional approval voting scores.
+   *
+   * @param ballots the {@code List} of ballots
+   * @return the {@code Map} of {@code Candidate}s to scores
+   */
+  private static Map<Candidate, Double> countSSPAV(
+      List<Set<Candidate>> ballots, int seatCount) {
+    Map<Candidate, Double> results = new HashMap<>();
+    for (int round = 1; round <= Candidate.count(); round++) {
+      LOGGER.log(Level.TRACE, "Round {0}", round);
+      Map<Candidate, Double> roundResults = new HashMap<>();
+      for (Set<Candidate> ballot : ballots) {
+        if (!ballot.isEmpty()) {
+          int count = getIntersectionSize(ballot, results.keySet());
+          for (Candidate c : ballot) {
+            if (!results.containsKey(c)) {
+              roundResults.put(c,
+                  roundResults.getOrDefault(c, 0.0) + Math.max(1 - (double) count / seatCount, 0.0));
             }
           }
         }
@@ -278,9 +507,9 @@ public class BallotCounter {
       if (!ballot.isEmpty()) {
         for (int[] slateValues : new Combinations(Candidate.count(), seatCount)) {
           Set<Candidate> slate = Candidate.fromValues(slateValues);
-          int intersectionSize = getIntersectionSize(ballot, slate);
-          if (intersectionSize > 0) {
-            results.put(slate, results.getOrDefault(slate, 0.0) + harmonic(intersectionSize));
+          int count = getIntersectionSize(ballot, slate);
+          if (count > 0) {
+            results.put(slate, results.getOrDefault(slate, 0.0) + harmonic(count));
           }
         }
       }

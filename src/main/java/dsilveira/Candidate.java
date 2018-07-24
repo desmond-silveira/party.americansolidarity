@@ -7,6 +7,7 @@
  */
 package dsilveira;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -20,6 +21,7 @@ import java.util.Set;
 public class Candidate implements Comparable<Candidate> {
 
   private final String name;
+  private final String lastName;
   private final int i;
 
   private static final Map<Integer, Candidate> lookup = new HashMap<>();
@@ -28,6 +30,7 @@ public class Candidate implements Comparable<Candidate> {
 
   Candidate(int i, String name) {
     this.name = name;
+    this.lastName = name.substring(name.lastIndexOf(" ") + 1);
     this.i = i;
     lookup.put(i, this);
     maxLength = Math.max(name.length(), maxLength);
@@ -38,6 +41,13 @@ public class Candidate implements Comparable<Candidate> {
    */
   String getName() {
     return name;
+  }
+
+  /**
+   * @return the last name (last space-delimited token) of the {@code Candidate}
+   */
+  String getLastName() {
+    return lastName;
   }
 
   /**
@@ -60,6 +70,18 @@ public class Candidate implements Comparable<Candidate> {
       candidates.add(fromValue(i));
     }
     return candidates;
+  }
+
+  /**
+   * Returns a {@code Collection} of all {@code Candidate}s.  This is backed by
+   * the internal {@code Collection} of {@code Candidate}s, so as more
+   * {@code Candidate}s are added, they are reflected in the {@code Collection}
+   * returned.
+   *
+   * @return a {@code Collection} of all {@code Candidate}s
+   */
+  static Collection<Candidate> all() {
+    return lookup.values();
   }
 
   /**

@@ -10,10 +10,8 @@ package dsilveira;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -33,18 +31,6 @@ public class Utils {
         .sorted(Entry.<K, V>comparingByValue().reversed())
         .collect(Collectors.toMap(Entry::getKey, Entry::getValue, (e1, e2) -> e1, LinkedHashMap::new))
         .entrySet();
-  }
-
-  /**
-   * Sorts a {@code Set} by values and returns the {@code SortedSet}.
-   *
-   * @param map the {@code Map}
-   * @return the sorted {@code Entry}s
-   */
-  public static <K> SortedSet<K> sortDescByValue(Set<K> set) {
-    TreeSet<K> sortedSet = new TreeSet<K>();
-    sortedSet.addAll(set);
-    return sortedSet;
   }
 
   /**
