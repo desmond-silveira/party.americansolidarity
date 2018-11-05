@@ -179,7 +179,7 @@ public class BallotCounter {
    * @param ballots the {@code List} of ballots
    * @return the {@code Map} of {@code Candidate}s to votes
    */
-  private static Map<Candidate, Integer> countAV(List<? extends Set<Candidate>> ballots) {
+  public static Map<Candidate, Integer> countAV(List<? extends Set<Candidate>> ballots) {
     Map<Candidate, Integer> results = new HashMap<>();
     for (Set<Candidate> ballot : ballots) {
       if (!ballot.isEmpty()) {
@@ -197,7 +197,7 @@ public class BallotCounter {
    * @param ballots the {@code List} of ballots
    * @return the {@code Map} of {@code Candidate}s to votes
    */
-  private static Map<Candidate, Integer> countNetAV(List<Set<Candidate>> ballots) {
+  public static Map<Candidate, Integer> countNetAV(List<Set<Candidate>> ballots) {
     Map<Candidate, Integer> results = new HashMap<>();
     for (Set<Candidate> ballot : ballots) {
       if (!ballot.isEmpty()) {
@@ -216,7 +216,7 @@ public class BallotCounter {
    * @param ballots the {@code List} of ballots
    * @return the {@code Map} of {@code Candidate}s to scores
    */
-  private static Map<Candidate, Double> countSAV(List<Set<Candidate>> ballots) {
+  public static Map<Candidate, Double> countSAV(List<Set<Candidate>> ballots) {
     Map<Candidate, Double> results = new HashMap<>();
     for (Set<Candidate> ballot : ballots) {
       if (!ballot.isEmpty()) {
@@ -247,19 +247,22 @@ public class BallotCounter {
    * @param seatCount
    * @return
    */
-  private static List<Candidate> countSTV(List<SortedSet<Candidate>> ballots,
+  public static List<Candidate> countSTV(List<SortedSet<Candidate>> ballots,
       int seatCount) {
-    final int droopQuota = (int) Math.floor(((double) ballots.size()) / (seatCount + 1)) + 1;
-    System.out.format("Droop quota: %1$d\n", droopQuota);
     List<Candidate> elected = new ArrayList<>(seatCount);
     Set<Candidate> excluded = new HashSet<>(Candidate.count() - seatCount);
     Map<Candidate, Integer> votes = countFirstChoiceVotes(ballots);
+    Map<Candidate, Integer> approvalCounts = countAV(ballots);
+
+    final int droopQuota = (int) Math.floor(((double) ballots.size()) / (seatCount + 1)) + 1;
+    System.out.format("Droop quota: %1$d\n", droopQuota);
+
     System.out.print("First preferences: ");
     for (Entry<Candidate, Integer> entry : sortDescByValue(votes)) {
       System.out.format("%1$s: %2$d; ", entry.getKey().getLastName(), entry.getValue());
     }
     System.out.println();
-    Map<Candidate, Integer> approvalCounts = countAV(ballots);
+
     while (elected.size() < seatCount) {
       List<Entry<Candidate, Integer>> sorted = new ArrayList<>(sortDescByValue(votes));
       Map<Candidate, Integer> nextChoices = null;
@@ -272,7 +275,7 @@ public class BallotCounter {
           int redistributionVotes = votes.get(candidate) - droopQuota;
           if (redistributionVotes > 0) {
             System.out.format("Redistribute %1$d votes; ", redistributionVotes);
-            nextChoices = getNextChoices(ballots, elected, excluded, candidate);
+            nextChoices = getRedistributionChoices(ballots, elected, excluded, candidate);
             // Redistribution via the Wright system
             multiplier = getSeatedMultiplier(approvalCounts, candidate, redistributionVotes);
             redistributeVotes(votes, candidate, nextChoices, multiplier);
@@ -288,7 +291,7 @@ public class BallotCounter {
         int redistributionVotes = lowest.getValue();
         if (redistributionVotes > 0) {
           System.out.format("Redistribute %1$d votes; ", redistributionVotes);
-          nextChoices = getNextChoices(ballots, elected, excluded, candidate);
+          nextChoices = getRedistributionChoices(ballots, elected, excluded, candidate);
           multiplier = getEliminatedMultiplier(lowest, nextChoices);
           redistributeVotes(votes, candidate, nextChoices, multiplier);
         }
@@ -335,7 +338,7 @@ public class BallotCounter {
     return qualified;
   }
 
-  private static Map<Candidate, Integer> getNextChoices(
+  private static Map<Candidate, Integer> getRedistributionChoices(
       List<SortedSet<Candidate>> ballots, Collection<Candidate> seated,
       Collection<Candidate> eliminated, Candidate candidate) {
     Map<Candidate, Integer> nextChoices = new HashMap<>(Candidate.count());
@@ -351,6 +354,7 @@ public class BallotCounter {
         } else if (seated.contains(c) || eliminated.contains(c)) {
           continue;
         }
+        // Not a candidate to redistribute votes to.
         break;
       }
     }
@@ -364,11 +368,7 @@ public class BallotCounter {
 
   private static double getEliminatedMultiplier(Entry<Candidate, Integer> lowest,
       Map<Candidate, Integer> nextChoices) {
-    int sumOfNextChoiceVotes = 0;
-    for (Entry<Candidate, Integer> nextChoice : nextChoices.entrySet()) {
-      sumOfNextChoiceVotes += nextChoice.getValue();
-    }
-    return ((double) lowest.getValue()) / sumOfNextChoiceVotes;
+    return ((double) lowest.getValue()) / nextChoices.values().stream().mapToInt(i -> i).sum();
   }
 
   private static void redistributeVotes(Map<Candidate, Integer> votes,
@@ -390,7 +390,7 @@ public class BallotCounter {
    * @param ballots the {@code List} of ballots
    * @return the {@code Map} of {@code Candidate}s to scores
    */
-  private static Map<Candidate, Double> countSPAV(
+  public static Map<Candidate, Double> countSPAV(
       List<Set<Candidate>> ballots) {
     Map<Candidate, Double> results = new HashMap<>();
     for (int round = 1; round <= Candidate.count(); round++) {
@@ -490,7 +490,7 @@ public class BallotCounter {
    * @param ballots the {@code List} of ballots
    * @return the {@code Map} of {@code Candidate}s to scores
    */
-  private static Map<Set<Candidate>, Double> countPAV(
+  public static Map<Set<Candidate>, Double> countPAV(
       List<Set<Candidate>> ballots, int seatCount) {
     long comboCount = CombinatoricsUtils.binomialCoefficient(Candidate.count(), seatCount);
     int mapCapacity = Integer.MAX_VALUE;
@@ -524,7 +524,7 @@ public class BallotCounter {
    * @return the {@code List} of ballots
    * @throws IOException if there was an error reading the file
    */
-  private static List<Set<Candidate>> readBallots(String filepathStr) throws IOException {
+  public static List<Set<Candidate>> readBallots(String filepathStr) throws IOException {
     Path path = Paths.get(filepathStr);
     List<String> lines = Files.readAllLines(path);
     String[] candidateNames = lines.get(0).split(",");
