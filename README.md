@@ -1,9 +1,17 @@
 # Multi-winner Approval Voting Ballot Counter
 
-This program reads a CSV file of ballots and returns the tallied results using
+This program reads either approval-style ballots from a CSV file or
+ranked-style ballots from a BLT file.  It returns the tallied results to the
+console using
 * [Approval Voting](https://en.wikipedia.org/wiki/Approval_voting)
-* [Proportional Approval Voting](https://en.wikipedia.org/wiki/Proportional_approval_voting)
+* Net Approval Voting
 * [Satisfaction Approval Voting](https://en.wikipedia.org/wiki/Satisfaction_approval_voting)
+* [Proportional Approval Voting](https://en.wikipedia.org/wiki/Proportional_approval_voting)
+* [Sequential Proportional Approval Voting](https://en.wikipedia.org/wiki/Sequential_proportional_approval_voting)
+* [Single Transferable Vote](https://en.wikipedia.org/wiki/Single_transferable_vote)
+using [Droop quota](https://en.wikipedia.org/wiki/Droop_quota) and
+[Wright](https://en.wikipedia.org/wiki/Wright_system) redistribution
+
 
 The format of the CSV file consists of a header line with all of the
 candidates followed by lines representing each ballot. A non-empty entry in
@@ -23,3 +31,13 @@ vote for Clinton, and the third ballot containing votes for Johnson, Stein,
 and Maturen.
 
 Note that this format is easily exportable from [SurveyMonkey](http://www.surveymonkey.com).
+
+The BLT file format is that first described by Hill, Wichmann & Woodall in
+_Algorithm 123 - Single Transferable Vote by Meek's method_ (1987) and
+popularized by OpenSTV.
+
+Copyright © 2018 Desmond Silveira.  All rights reserved.
+
+This software is free to use and extend to all registered members of the
+American Solidarity Party.  Any extensions must give credit to the author
+and preserve this notice.
