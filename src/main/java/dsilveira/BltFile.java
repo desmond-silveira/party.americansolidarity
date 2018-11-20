@@ -63,7 +63,7 @@ public class BltFile {
 
     tokenizer.nextToken();
     while (tokenizer.nval < 0) {
-      withdrawn.add((int) tokenizer.nval);
+      withdrawn.add((int) -tokenizer.nval);
       tokenizer.nextToken();
     }
 
@@ -79,10 +79,12 @@ public class BltFile {
       tokenizer.nextToken();
     } while (tokenizer.nval != 0);
 
-    candidates = new Candidate[candidateCount];
+    candidates = new Candidate[candidateCount - withdrawn.size()];
     for (int i = 0; i < candidateCount; i++) {
       tokenizer.nextToken();
-      candidates[i] = new Candidate(i + 1, tokenizer.sval);
+      if (!withdrawn.contains(i + 1)) {
+        candidates[i] = new Candidate(i + 1, tokenizer.sval);
+      }
     }
 
     tokenizer.nextToken();
@@ -97,7 +99,9 @@ public class BltFile {
     for (Map.Entry<List<Integer>, Integer> ballotConfig : ballots.entrySet()) {
       LinkedHashSet<Candidate> ballot = new LinkedHashSet<>();
       for (Integer i : ballotConfig.getKey()) {
-        ballot.add(Candidate.fromValue(i));
+        if (!withdrawn.contains(i)) {
+          ballot.add(Candidate.fromValue(i));
+        }
       }
       for (int i = 0; i < ballotConfig.getValue(); i++) {
         candidateBallots.add(ballot);
