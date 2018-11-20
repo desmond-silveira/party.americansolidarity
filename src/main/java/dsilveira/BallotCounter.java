@@ -355,8 +355,8 @@ public class BallotCounter {
     Set<Candidate> excluded = new HashSet<>(Candidate.count() - seatCount);
     Map<Candidate, Double> candidateTotalValueOfVotes = countFirstChoiceVotes(ballots);
 
-    final int droopQuota = (int) Math.floor(((double) ballots.size()) / (seatCount + 1)) + 1;
-    System.out.format("Droop quota: %1$d\n", droopQuota);
+    final double quota = getHagenbachBischoffQuota(ballots.size(), seatCount);
+    System.out.format("Quota: %1$.2f\n", quota);
 
     System.out.print("First preferences: ");
     for (Entry<Candidate, Double> entry : sortDescByValue(candidateTotalValueOfVotes)) {
@@ -372,11 +372,11 @@ public class BallotCounter {
       // When there is a tie in votes among qualified candidates, the order that
       // their votes are redistributed is non-deterministic, and the actual
       // order used may affect the outcome.
-      List<Candidate> provisionals = getProvisionalCandidates(sorted, droopQuota);
+      List<Candidate> provisionals = getProvisionalCandidates(sorted, quota);
       elected.addAll(provisionals);
       if (!provisionals.isEmpty()) {
         for (Candidate provisional : provisionals) {
-          double redistributionVotes = candidateTotalValueOfVotes.get(provisional) - droopQuota;
+          double redistributionVotes = candidateTotalValueOfVotes.get(provisional) - quota;
           redistribute(provisional, redistributionVotes, candidateTotalValueOfVotes,
               ballots, seatCount, elected, excluded, "Seat");
         }
@@ -391,6 +391,36 @@ public class BallotCounter {
     }
 
     return elected;
+  }
+
+  /**
+   * Returns the Droop quota.
+   * <p/>
+   * This is considered the best quota for use with IRV elections.  Any
+   * candidate that attains a vote count that equals or exceeds this quota
+   * should be elected.
+   *
+   * @param ballotCount the count of non-blank, unspoiled ballots
+   * @param seatCount the count of seats to be filled
+   * @return the Droop quota
+   */
+  public static int getDroopQuota(int ballotCount, int seatCount) {
+    return (int) ((double) ballotCount / (seatCount + 1)) + 1;
+  }
+
+  /**
+   * Returns the Hagenbach-Bischoff quota.
+   * <p/>
+   * This is considered the best quota for use with STV elections.  Any
+   * candidate that attains a vote count that exceeds this quota should be
+   * elected.
+   *
+   * @param ballotCount the count of non-blank, unspoiled ballots
+   * @param seatCount the count of seats to be filled
+   * @return the Hagenbach-Bischoff quota
+   */
+  public static double getHagenbachBischoffQuota(int ballotCount, int seatCount) {
+    return (double) ballotCount / (seatCount + 1);
   }
 
   /**
@@ -426,7 +456,7 @@ public class BallotCounter {
    * @return the {@code Candidate}s
    */
   private static List<Candidate> getProvisionalCandidates(
-      List<Entry<Candidate, Double>> sorted, int quota) {
+      List<Entry<Candidate, Double>> sorted, double quota) {
     List<Candidate> qualified = new ArrayList<>();
     for (Entry<Candidate, Double> entry : sorted) {
       if (entry.getValue() > quota) {
