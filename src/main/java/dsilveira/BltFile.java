@@ -80,10 +80,12 @@ public class BltFile {
     } while (tokenizer.nval != 0);
 
     candidates = new Candidate[candidateCount - withdrawn.size()];
+    int index = 0;
     for (int i = 0; i < candidateCount; i++) {
       tokenizer.nextToken();
       if (!withdrawn.contains(i + 1)) {
-        candidates[i] = new Candidate(i + 1, tokenizer.sval);
+        candidates[index] = new Candidate(i + 1, tokenizer.sval);
+        index++;
       }
     }
 

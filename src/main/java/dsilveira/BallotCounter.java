@@ -596,6 +596,7 @@ public class BallotCounter {
       mapCapacity = (int) comboCount;
     }
     Map<Set<Candidate>, Double> results = new HashMap<>(mapCapacity);
+    ArrayList<Candidate> candidates = new ArrayList<>(Candidate.all());
 
     Iterable<? extends Set<Candidate>> iter = ballots;
     if (comboCount > MIN_COMBO_COUNT_FOR_PROGRESS_BAR) {
@@ -604,7 +605,10 @@ public class BallotCounter {
     for (Set<Candidate> ballot : iter) {
       if (!ballot.isEmpty()) {
         for (int[] slateValues : new Combinations(Candidate.count(), seatCount)) {
-          Set<Candidate> slate = Candidate.fromValues(slateValues);
+          Set<Candidate> slate = new HashSet<>(slateValues.length);
+          for (int i : slateValues) {
+            slate.add(candidates.get(i));
+          }
           int count = getIntersectionSize(ballot, slate);
           if (count > 0) {
             results.put(slate, results.getOrDefault(slate, 0.0) + harmonic(count));

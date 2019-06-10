@@ -8,10 +8,10 @@
 package dsilveira;
 
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * An election candidate.
@@ -24,7 +24,7 @@ public class Candidate implements Comparable<Candidate> {
   private final String lastName;
   private final int i;
 
-  private static final Map<Integer, Candidate> lookup = new HashMap<>();
+  private static final Map<Integer, Candidate> lookup = new TreeMap<>();
   private static Map<Candidate, Integer> counts;
   private static int maxLength = 0;
 
@@ -73,10 +73,10 @@ public class Candidate implements Comparable<Candidate> {
   }
 
   /**
-   * Returns a {@code Collection} of all {@code Candidate}s.  This is backed by
-   * the internal {@code Collection} of {@code Candidate}s, so as more
-   * {@code Candidate}s are added, they are reflected in the {@code Collection}
-   * returned.
+   * Returns a {@code Collection} of all {@code Candidate}s sorted by index.
+   * This is backed by the internal {@code Collection} of {@code Candidate}s, so
+   * as more {@code Candidate}s are added, they are reflected in the
+   * {@code Collection} returned.
    *
    * @return a {@code Collection} of all {@code Candidate}s
    */
