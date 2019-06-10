@@ -12,6 +12,41 @@ console using
 using [Droop quota](https://en.wikipedia.org/wiki/Droop_quota) and
 [Wright](https://en.wikipedia.org/wiki/Wright_system) redistribution
 
+## Build
+
+To build the software from the source code, make sure that you have at least
+Java 9, though I recommend installing the latest version of Java.  To check
+which Java have installed, if any, run the following command from the command
+line:
+
+`java --version`
+
+In addition to Java, building the software from scratch requires Maven, which
+can be downloaded from:
+
+https://maven.apache.org/
+
+Once all the project has been downloaded into a directory, and both Java and
+Maven have been installed, build using the following command from within the
+directory with the project:
+
+`mvn package`
+
+The result of the build will be placed in the `target` subdirectory.
+
+## Running the Project
+
+Once the software has been built or downloaded in JAR form, run the project
+using the following command:
+
+`java -jar .\ballot-counter-0.0.1.jar <filepath> [seat_count] [max_proportional_slates]`
+
+where <filepath> is the path to the ballot data file.
+
+Optionally, include the number of seats to be filled and the max number of
+proportional slates to be returned in the results.
+
+## Data Files
 
 The format of the CSV file consists of a header line with all of the
 candidates followed by lines representing each ballot. A non-empty entry in
