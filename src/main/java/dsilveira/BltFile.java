@@ -71,10 +71,10 @@ public class BltFile {
       int weight = (int) tokenizer.nval;
       tokenizer.nextToken();
       List<Integer> ballot = new ArrayList<>();
-      do {
+      while (tokenizer.nval != 0) {
         ballot.add((int) tokenizer.nval);
         tokenizer.nextToken();
-      }  while (tokenizer.nval != 0);
+      }
       ballots.put(ballot, ballots.getOrDefault(ballot, 0) + weight);
       tokenizer.nextToken();
     } while (tokenizer.nval != 0);
