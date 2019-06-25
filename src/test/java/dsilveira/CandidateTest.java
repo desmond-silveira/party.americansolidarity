@@ -33,14 +33,14 @@ class CandidateTest {
     Candidate f = new Candidate(2, "f");
     Candidate g = new Candidate(-3, "d");
 
-    Map<Candidate, Integer> map = new HashMap<>();
-    map.put(a, 9);
-    map.put(b, 9);
-    map.put(c, 8);
-    map.put(d, 9);
-    map.put(e, 10);
-    map.put(f, 9);
-    map.put(g, 9);
+    Map<Candidate, Double> map = new HashMap<>();
+    map.put(a, 9.0);
+    map.put(b, 9.0);
+    map.put(c, 8.0);
+    map.put(d, 9.0);
+    map.put(e, 10.0);
+    map.put(f, 9.0);
+    map.put(g, 9.0);
 
     // e comes after d, by name, if counts aren't set.
     assertTrue(e.compareTo(d) > 0);

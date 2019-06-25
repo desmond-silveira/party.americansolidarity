@@ -96,7 +96,7 @@ public class BallotCounter {
     }
     List<? extends Set<Candidate>> approvalBallots = null;
     List<LinkedHashSet<Candidate>> rankedBallots = null;
-    Map<Candidate, Integer> approvalCounts = null;
+    Map<Candidate, Double> approvalCounts = null;
     BltFile bltFile = null;
     try {
       String filepath = args[0];
@@ -134,7 +134,7 @@ public class BallotCounter {
 
     System.out.println("\nAPPROVAL VOTING");
     System.out.println("=======================================");
-    for (Entry<Candidate, Integer> candidateResult : sortDescByValue(approvalCounts)) {
+    for (Entry<Candidate, Double> candidateResult : sortDescByValue(approvalCounts)) {
       System.out.format("%1$-" + nameFieldLength + "s%2$8d\n",
           candidateResult.getKey().getName(), candidateResult.getValue());
     }
@@ -174,6 +174,15 @@ public class BallotCounter {
     for (Entry<Candidate, Double> candidateResult : sortDescByValue(spavResults)) {
       System.out.format("%1$-" + nameFieldLength + "s%2$8.3f\n",
           candidateResult.getKey().getName(), candidateResult.getValue());
+    }
+
+    System.out.println("\nEXCESS APPROVAL VOTING");
+    System.out.println("=======================================");
+    List<Candidate> eavResults = countEAV(approvalBallots, seatCount);
+    LOGGER.log(Level.TRACE, "Final Results");
+    LOGGER.log(Level.TRACE, "-------------");
+    for (Candidate candidate : eavResults) {
+      System.out.format("%1$-" + nameFieldLength + "s\n", candidate.getName());
     }
 
 //    System.out.println("\nSILVEIRA SEQUENTIAL PROPORTIONAL APPROVAL VOTING");
@@ -229,12 +238,12 @@ public class BallotCounter {
    * @param ballots the {@code List} of ballots
    * @return the {@code Map} of {@code Candidate}s to votes
    */
-  public static Map<Candidate, Integer> countAV(List<? extends Set<Candidate>> ballots) {
-    Map<Candidate, Integer> results = new HashMap<>();
+  public static Map<Candidate, Double> countAV(List<? extends Set<Candidate>> ballots) {
+    Map<Candidate, Double> results = new HashMap<>();
     for (Set<Candidate> ballot : ballots) {
       if (!ballot.isEmpty()) {
         for (Candidate c : ballot) {
-          results.put(c, results.getOrDefault(c, 0) + 1);
+          results.put(c, results.getOrDefault(c, 0.0) + 1);
         }
       }
     }
@@ -326,6 +335,57 @@ public class BallotCounter {
     }
 
     return results;
+  }
+
+  /**
+   * Counts votes and returns excess approval voting scores.
+   *
+   * @param ballots the {@code List} of ballots
+   * @return the {@code Map} of {@code Candidate}s to scores
+   */
+  public static List<Candidate> countEAV(
+      List<? extends Set<Candidate>> ballots, int seatCount) {
+    List<Candidate> elected = new ArrayList<>(seatCount);
+    Map<Candidate, Double> results = countAV(ballots);
+    for (int round = 1; round <= Candidate.count(); round++) {
+      LOGGER.log(Level.TRACE, "Round {0}", round);
+      Map<Candidate, Double> roundResults = new HashMap<>();
+      for (Set<Candidate> ballot : ballots) {
+        if (!ballot.isEmpty()) {
+          int count = getIntersectionSize(ballot, results.keySet());
+          for (Candidate c : ballot) {
+            if (!results.containsKey(c)) {
+              roundResults.put(c,
+                  roundResults.getOrDefault(c, 0.0) + 1.0 / (1.0 + count));
+            }
+          }
+        }
+      }
+      if (roundResults.isEmpty()) {
+        break;
+      }
+      Set<Entry<Candidate, Double>> sortedResults = sortDescByValue(roundResults);
+      if (LOGGER.isLoggable(Level.TRACE)) {
+        for (Entry<Candidate, Double> entry : sortedResults) {
+          LOGGER.log(Level.TRACE, "{0} {1}", entry.getKey().getName(),
+              entry.getValue());
+        }
+      }
+      // Seat the winner (or winners if there is a tie) of the round.
+      double topRoundScore = 0;
+      for (Entry<Candidate, Double> nextTop : sortedResults) {
+        if (topRoundScore == 0) {
+          topRoundScore = nextTop.getValue();
+        }
+        if (nextTop.getValue() == topRoundScore) {
+          results.put(nextTop.getKey(), nextTop.getValue());
+        } else {
+          break;
+        }
+      }
+    }
+
+    return elected;
   }
 
   /**

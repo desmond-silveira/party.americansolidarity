@@ -25,7 +25,7 @@ public class Candidate implements Comparable<Candidate> {
   private final int i;
 
   private static final Map<Integer, Candidate> lookup = new TreeMap<>();
-  private static Map<Candidate, Integer> counts;
+  private static Map<Candidate, Double> counts;
   private static int maxLength = 0;
 
   Candidate(int i, String name) {
@@ -89,7 +89,7 @@ public class Candidate implements Comparable<Candidate> {
    *
    * @param counts the {@code Map} of counts
    */
-  static void setCounts(Map<Candidate, Integer> counts) {
+  static void setCounts(Map<Candidate, Double> counts) {
     Candidate.counts = counts;
   }
 
