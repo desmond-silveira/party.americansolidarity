@@ -1,10 +1,10 @@
 package dsilveira;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.StreamTokenizer;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -37,60 +37,86 @@ public class BltFile {
     this.filepath = filepath;
   }
 
+  public BltFile(String filepath, int seatCount, Map<List<Integer>, Integer> ballots, Candidate[] candidates) {
+    this.filepath = filepath;
+    this.seatCount = seatCount;
+    this.ballots = ballots;
+    this.candidates = candidates;
+    candidateCount = candidates.length;
+  }
+
   public void read() throws IOException {
-    Path path = Paths.get(filepath);
-    BufferedReader reader = Files.newBufferedReader(path);
-    StreamTokenizer tokenizer = new StreamTokenizer(reader);
-    tokenizer.commentChar('#');
-    tokenizer.quoteChar('"');
-    tokenizer.slashStarComments(true);
+    try (BufferedReader reader = Files.newBufferedReader(Paths.get(filepath))) {
+      StreamTokenizer tokenizer = new StreamTokenizer(reader);
+      tokenizer.commentChar('#');
+      tokenizer.quoteChar('"');
+      tokenizer.slashStarComments(true);
 
-    if (tokenizer.nextToken() == StreamTokenizer.TT_WORD
-        && tokenizer.sval.startsWith("\uFEFF")) {
-      String token = tokenizer.sval.substring(1);
-      if (token.isEmpty()) {
-        tokenizer.nextToken();
-        candidateCount = (int) tokenizer.nval;
+      if (tokenizer.nextToken() == StreamTokenizer.TT_WORD
+          && tokenizer.sval.startsWith("\uFEFF")) {
+        String token = tokenizer.sval.substring(1);
+        if (token.isEmpty()) {
+          tokenizer.nextToken();
+          candidateCount = (int) tokenizer.nval;
+        } else {
+          candidateCount = Integer.parseInt(token);
+        }
       } else {
-        candidateCount = Integer.parseInt(token);
+        candidateCount = (int) tokenizer.nval;
       }
-    } else {
-      candidateCount = (int) tokenizer.nval;
-    }
 
-    tokenizer.nextToken();
-    seatCount = (int) tokenizer.nval;
-
-    tokenizer.nextToken();
-    while (tokenizer.nval < 0) {
-      withdrawn.add((int) -tokenizer.nval);
       tokenizer.nextToken();
-    }
+      seatCount = (int) tokenizer.nval;
 
-    do {
-      int weight = (int) tokenizer.nval;
       tokenizer.nextToken();
-      List<Integer> ballot = new ArrayList<>();
-      while (tokenizer.nval != 0) {
-        ballot.add((int) tokenizer.nval);
+      while (tokenizer.nval < 0) {
+        withdrawn.add((int) -tokenizer.nval);
         tokenizer.nextToken();
       }
-      ballots.put(ballot, ballots.getOrDefault(ballot, 0) + weight);
-      tokenizer.nextToken();
-    } while (tokenizer.nval != 0);
 
-    candidates = new Candidate[candidateCount - withdrawn.size()];
-    int index = 0;
-    for (int i = 0; i < candidateCount; i++) {
+      do {
+        int weight = (int) tokenizer.nval;
+        tokenizer.nextToken();
+        List<Integer> ballot = new ArrayList<>();
+        while (tokenizer.nval != 0) {
+          ballot.add((int) tokenizer.nval);
+          tokenizer.nextToken();
+        }
+        ballots.put(ballot, ballots.getOrDefault(ballot, 0) + weight);
+        tokenizer.nextToken();
+      } while (tokenizer.nval != 0);
+
+      candidates = new Candidate[candidateCount - withdrawn.size()];
+      int index = 0;
+      for (int i = 0; i < candidateCount; i++) {
+        tokenizer.nextToken();
+        if (!withdrawn.contains(i + 1)) {
+          candidates[index] = new Candidate(i + 1, tokenizer.sval);
+          index++;
+        }
+      }
+
       tokenizer.nextToken();
-      if (!withdrawn.contains(i + 1)) {
-        candidates[index] = new Candidate(i + 1, tokenizer.sval);
-        index++;
+      title = tokenizer.sval;
+    }
+  }
+
+  public void write() throws IOException {
+    try (BufferedWriter writer = Files.newBufferedWriter(Paths.get(filepath))) {
+
+      writer.append(candidateCount + " ").append(seatCount + "\n");
+      for (Map.Entry<List<Integer>, Integer> entry : ballots.entrySet()) {
+        writer.append(entry.getValue() + " ");
+        for (Integer i : entry.getKey()) {
+          writer.append(i + " ");
+        }
+        writer.append("0\n");
+      }
+      writer.append("0\n");
+      for (Candidate candidate : candidates) {
+        writer.append('"').append(candidate.getName()).append("\"\n");
       }
     }
-
-    tokenizer.nextToken();
-    title = tokenizer.sval;
   }
 
   public List<LinkedHashSet<Candidate>> getBallots() {
