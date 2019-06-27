@@ -135,7 +135,7 @@ public class BallotCounter {
     System.out.println("\nAPPROVAL VOTING");
     System.out.println("=======================================");
     for (Entry<Candidate, Double> candidateResult : sortDescByValue(approvalCounts)) {
-      System.out.format("%1$-" + nameFieldLength + "s%2$8d\n",
+      System.out.format("%1$-" + nameFieldLength + "s%2$8.0f\n",
           candidateResult.getKey().getName(), candidateResult.getValue());
     }
 
@@ -397,56 +397,107 @@ public class BallotCounter {
    * @param ballots
    * @param seatCount
    * @return
-   * @see <http href="https://en.wikipedia.org/wiki/Wright_system">Wright System - Wikipedia</a>
+   * @see <http href="https://www.aph.gov.au/Parliamentary_Business/Committees/House_of_Representatives_Committees?url=em/elect07/subs/sub051.1.pdf">The Wright System</a>
    */
   public static List<Candidate> countSTV(
       List<LinkedHashSet<Candidate>> rankedBallots, int seatCount) {
 
-    List<LinkedHashSet<Candidate>> ballots = new ArrayList<>(rankedBallots.size());
-    for (LinkedHashSet<Candidate> rankedBallot : rankedBallots) {
-      // STV requires that blank ballots not be counted, so as not to affect the
-      // quota.
-      if (!rankedBallot.isEmpty()) {
-        ballots.add(rankedBallot);
-      }
-    }
-
     List<Candidate> elected = new ArrayList<>(seatCount);
     Set<Candidate> excluded = new HashSet<>(Candidate.count() - seatCount);
-    Map<Candidate, Double> candidateTotalValueOfVotes = countFirstChoiceVotes(ballots);
 
-    final double quota = getHagenbachBischoffQuota(ballots.size(), seatCount);
-    System.out.format("Quota: %1$.2f\n", quota);
-
-    System.out.print("First preferences: ");
-    for (Entry<Candidate, Double> entry : sortDescByValue(candidateTotalValueOfVotes)) {
-      System.out.format("%1$s: %2$.0f; ", entry.getKey().getLastName(), entry.getValue());
-    }
-    System.out.println();
-
-    // This algorithm determines all candidates to be seated in this round
-    // before transferring any of their votes.
+    top:
     while (elected.size() < seatCount) {
-      List<Entry<Candidate, Double>> sorted =
-          new ArrayList<>(sortDescByValue(candidateTotalValueOfVotes));
-      // When there is a tie in votes among qualified candidates, the order that
-      // their votes are redistributed is non-deterministic, and the actual
-      // order used may affect the outcome.
-      List<Candidate> provisionals = getProvisionalCandidates(sorted, quota);
-      elected.addAll(provisionals);
-      if (!provisionals.isEmpty()) {
-        for (Candidate provisional : provisionals) {
-          double redistributionVotes = candidateTotalValueOfVotes.get(provisional) - quota;
-          redistribute(provisional, redistributionVotes, candidateTotalValueOfVotes,
-              ballots, seatCount, elected, excluded, "Seat");
+
+      // Wright System 2.1
+      List<LinkedHashSet<Candidate>> ballots = new ArrayList<>(rankedBallots.size());
+      for (LinkedHashSet<Candidate> rankedBallot : rankedBallots) {
+        // STV requires that blank ballots not be counted, so as not to affect the
+        // quota.
+        if (!rankedBallot.isEmpty()) {
+          for (Candidate c : rankedBallot) {
+            if (!excluded.contains(c)) {
+              // Wright System 2.1(a)
+              ballots.add(rankedBallot);
+              break;
+            }
+          }
         }
-      } else {
-        Entry<Candidate, Double> lowest = sorted.get(sorted.size() - 1);
-        Candidate candidate = lowest.getKey();
-        double redistributionVotes = lowest.getValue();
-        excluded.add(candidate);
-        redistribute(candidate, redistributionVotes, candidateTotalValueOfVotes,
-            ballots, seatCount, elected, excluded, "Eliminate");
+      }
+      Map<Candidate, Double> candidateTotalValueOfVotes = countFirstChoiceVotes(ballots, excluded);
+
+      // Wright System 2.4 and  2.5
+      final double quota = getHagenbachBischoffQuota(ballots.size(), seatCount);
+      System.out.format("Quota: %1$.2f\n", quota);
+
+      System.out.print("First preferences: ");
+      for (Entry<Candidate, Double> entry : sortDescByValue(candidateTotalValueOfVotes)) {
+        System.out.format("%1$s: %2$.0f; ", entry.getKey().getLastName(), entry.getValue());
+      }
+      System.out.println();
+
+      // This algorithm determines all candidates to be seated in this round
+      // before transferring any of their votes.
+      while (elected.size() < seatCount) {
+        List<Entry<Candidate, Double>> sorted =
+            new ArrayList<>(sortDescByValue(candidateTotalValueOfVotes));
+        // Wright System 2.6
+        // When there is a tie in votes among qualified candidates, the order that
+        // their votes are redistributed is non-deterministic, and the actual
+        // order used may affect the outcome.
+        List<Candidate> provisionals = getProvisionalCandidates(sorted, quota);
+        // Wright System 2.11.4
+        elected.addAll(provisionals);
+        if (elected.size() == seatCount) {
+          // Wright System 2.7
+          return elected;
+        } else if (!provisionals.isEmpty()) {
+          // Wright System 2.8
+          for (Candidate provisional : provisionals) {
+            // Wright System 2.9
+            double surplusValue = candidateTotalValueOfVotes.get(provisional) - quota;
+            redistribute(provisional, surplusValue, candidateTotalValueOfVotes,
+                ballots, seatCount, elected, excluded, "Seat");
+          }
+          // Wright System 2.11.5
+          if (elected.size() == seatCount) {
+            return elected;
+          }
+          // Wright System 2.12 are considered at the top of the next iteration
+          // of the while loop.
+        } else {
+          // Wright System 2.13 and 2.14
+          // The Wright System 2.14 says that if there is a tie for lowest, then
+          // the candidate to be excluded should be determined by lot.  This
+          // implementation doesn't do that, in a strict sense, but the candidate
+          // selected for exclusion is non-deterministic.
+          Entry<Candidate, Double> lowest = sorted.get(sorted.size() - 1);
+          Candidate candidate = lowest.getKey();
+//          double redistributionVotes = lowest.getValue();
+          excluded.add(candidate);
+          System.out.format("Eliminate, %1$s, %2$.1f; ", candidate.getLastName(),
+              candidateTotalValueOfVotes.get(candidate));
+          // Wright System 2.15
+          Set<Candidate> continuing = new HashSet<>(Candidate.count() - excluded.size());
+          continuing.addAll(Candidate.all());
+          continuing.removeAll(excluded);
+          if (continuing.size() == seatCount) {
+            for (Entry<Candidate, Double> candidateEntry : sorted) {
+              Candidate c = candidateEntry.getKey();
+              if (!elected.contains(c) && !excluded.contains(c)) {
+                System.out.format("Seat, %1$s; ", candidate.getLastName());
+                elected.add(c);
+              }
+            }
+            System.out.println();
+            return elected;
+          }
+          System.out.println("Reset;");
+          // Wright 2.16
+          elected.clear();
+          continue top;
+//          redistribute(candidate, redistributionVotes, candidateTotalValueOfVotes,
+//              ballots, seatCount, elected, excluded, "Eliminate");
+        }
       }
     }
 
@@ -487,24 +538,34 @@ public class BallotCounter {
    * Return the count of first choice votes for all {@code Candidate}s.
    *
    * @param ballots
-   * @param seated
+   * @param excluded
    * @return
    */
   private static Map<Candidate, Double> countFirstChoiceVotes(
-      List<LinkedHashSet<Candidate>> ballots) {
+      List<LinkedHashSet<Candidate>> ballots, Set<Candidate> excluded) {
     Map<Candidate, Double> votes = new HashMap<>(Candidate.count());
     for (Set<Candidate> ballot : ballots) {
       if (!ballot.isEmpty()) {
-        Candidate candidate = ballot.iterator().next();
-        votes.put(candidate, votes.getOrDefault(candidate, 0.0) + 1);
+        Candidate candidate = null;
+        for (Candidate c : ballot) {
+          if (!excluded.contains(c)) {
+            candidate = c;
+            break;
+          }
+        }
+        if (candidate != null) {
+          // Wright System 2.2 and 2.3
+          votes.put(candidate, votes.getOrDefault(candidate, 0.0) + 1);
+        }
       }
     }
-    // Add any candidates that didn't get any first choice votes.
-    for (Candidate candidate : Candidate.all()) {
-      if (!votes.containsKey(candidate)) {
-        votes.put(candidate, 0.0);
-      }
-    }
+//    // Wright System 2.1(a)
+//    // Add any candidates that didn't get any first choice votes.
+//    for (Candidate candidate : Candidate.all()) {
+//      if (!votes.containsKey(candidate)) {
+//        votes.put(candidate, 0.0);
+//      }
+//    }
     return votes;
   }
 
@@ -517,20 +578,20 @@ public class BallotCounter {
    */
   private static List<Candidate> getProvisionalCandidates(
       List<Entry<Candidate, Double>> sorted, double quota) {
-    List<Candidate> qualified = new ArrayList<>();
+    List<Candidate> provisionallyElected = new ArrayList<>();
     for (Entry<Candidate, Double> entry : sorted) {
       if (entry.getValue() > quota) {
-        qualified.add(entry.getKey());
+        provisionallyElected.add(entry.getKey());
       }
     }
-    return qualified;
+    return provisionallyElected;
   }
 
   /**
    * Redistribute votes via the Wright system.
    *
    * @param candidate the {@code Candidate} whose votes to redistribute
-   * @param redistributionVotes the number of votes to redistribute
+   * @param surplusValue the number of votes to redistribute
    * @param candidateTotalValueOfVotes the running total value of votes for each {@code Candidate}
    * @param ballots the ballots
    * @param seatCount the total number of seats to fill
@@ -538,28 +599,31 @@ public class BallotCounter {
    * @param excluded the {@code Candidate}s that are already designated as not eliminated
    * @param action whether this redistribution is to "Seat" or "Eliminate" a {@code Candidate}
    */
-  private static void redistribute(Candidate candidate, double redistributionVotes,
+  private static void redistribute(Candidate candidate, double surplusValue,
       Map<Candidate, Double> candidateTotalValueOfVotes,
       List<LinkedHashSet<Candidate>> ballots, int seatCount,
       List<Candidate> elected, Set<Candidate> excluded, String action) {
     System.out.format("%1$s, %2$s, %3$.1f; ", action, candidate.getLastName(),
         candidateTotalValueOfVotes.get(candidate));
-    if (elected.size() < seatCount && redistributionVotes > 0) {
-      System.out.format("Redistribute %1$.1f votes; ", redistributionVotes);
+    if (elected.size() < seatCount && surplusValue > 0) {
+      System.out.format("Redistribute %1$.1f votes; ", surplusValue);
+      // Wright System 2.11.1
       Map<Candidate, Double> redistributionCandidates =
           getRedistributionCandidates(ballots, elected, excluded, candidate);
       for (Entry<Candidate, Double> nextChoice : redistributionCandidates.entrySet()) {
+        // Wright System 2.10
         Candidate redistributionCandidate = nextChoice.getKey();
-        double redistribution = nextChoice.getValue() * redistributionVotes
-            / getTotalVoteValue(redistributionCandidates);
+        double surplusTransferValue = nextChoice.getValue() * surplusValue
+            / getTotalVoteValue(redistributionCandidates); // TODO Is this legit for 2.10 and 2.11.2?
         double current = candidateTotalValueOfVotes.getOrDefault(redistributionCandidate, 0.0);
-        double total = redistribution + current;
+        double total = surplusTransferValue + current;
         System.out.format("%1$s: %2$.1f+%3$.1f=%4$.1f; ",
             redistributionCandidate.getLastName(),
             candidateTotalValueOfVotes.getOrDefault(redistributionCandidate, 0.0),
-            redistribution, total);
+            surplusTransferValue, total);
+        // Wright System 2.11.3
         candidateTotalValueOfVotes.put(candidate,
-            candidateTotalValueOfVotes.get(candidate) - redistribution);
+            candidateTotalValueOfVotes.get(candidate) - surplusTransferValue);
         candidateTotalValueOfVotes.put(redistributionCandidate, total);
       }
     }
@@ -568,18 +632,18 @@ public class BallotCounter {
   }
 
   private static Map<Candidate, Double> getRedistributionCandidates(
-      List<LinkedHashSet<Candidate>> ballots, Collection<Candidate> seated,
-      Collection<Candidate> eliminated, Candidate candidate) {
+      List<LinkedHashSet<Candidate>> ballots, Collection<Candidate> elected,
+      Collection<Candidate> excluded, Candidate candidate) {
     Map<Candidate, Double> nextChoices = new HashMap<>(Candidate.count());
     for (Set<Candidate> ballot : ballots) {
       boolean candidateFound = false;
       for (Candidate c : ballot) {
-        if (candidateFound && !seated.contains(c) && !eliminated.contains(c)) {
+        if (candidateFound && !elected.contains(c) && !excluded.contains(c)) {
           nextChoices.put(c, nextChoices.getOrDefault(c, 0.0) + 1);
           break;
         } else if (c.equals(candidate)) {
           candidateFound = true;
-        } else if (!seated.contains(c) && !eliminated.contains(c)) {
+        } else if (!elected.contains(c) && !excluded.contains(c)) {
           // Not a candidate to redistribute votes to.
           break;
         }

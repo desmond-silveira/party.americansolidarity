@@ -51,6 +51,13 @@ public class Candidate implements Comparable<Candidate> {
   }
 
   /**
+   * @return the internal index of the {@code Candidate}
+   */
+  int getIndex() {
+    return i;
+  }
+
+  /**
    * Returns the {@code Candidate} for the given index.
    *
    * @param i the index
