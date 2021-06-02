@@ -39,7 +39,7 @@ The result of the build will be placed in the `target` subdirectory.
 Once the software has been built or downloaded in JAR form, run the project
 using the following command:
 
-`java -jar .\ballot-counter-0.0.2.jar <filepath> [seat_count] [max_proportional_slates]`
+`java -jar ./target/ballot-counter-0.0.3.jar <filepath> [seat_count] [max_proportional_slates]`
 
 where <filepath> is the path to the ballot data file.
 
