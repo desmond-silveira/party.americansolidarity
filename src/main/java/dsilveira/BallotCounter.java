@@ -394,7 +394,6 @@ public class BallotCounter {
    * This uses the more popular Droop Quota, favoring larger parties, over the
    * Hare quota that favors smaller parties.
    *
-   * @param ballots
    * @param seatCount
    * @return
    * @see <http href="https://www.aph.gov.au/Parliamentary_Business/Committees/House_of_Representatives_Committees?url=em/elect07/subs/sub051.1.pdf">The Wright System</a>
@@ -409,23 +408,11 @@ public class BallotCounter {
     while (elected.size() < seatCount) {
 
       // Wright System 2.1
-      List<LinkedHashSet<Candidate>> ballots = new ArrayList<>(rankedBallots.size());
-      for (LinkedHashSet<Candidate> rankedBallot : rankedBallots) {
-        // STV requires that blank ballots not be counted, so as not to affect the
-        // quota.
-        if (!rankedBallot.isEmpty()) {
-          for (Candidate c : rankedBallot) {
-            if (!excluded.contains(c)) {
-              // Wright System 2.1(a)
-              ballots.add(rankedBallot);
-              break;
-            }
-          }
-        }
-      }
+      List<LinkedHashSet<Candidate>> ballots = getNonExhaustedBallots(rankedBallots, excluded);
+      // Wright System 2.2 and 2.3
       Map<Candidate, Double> candidateTotalValueOfVotes = countFirstChoiceVotes(ballots, excluded);
 
-      // Wright System 2.4 and  2.5
+      // Wright System 2.4 and 2.5
       final double quota = getHagenbachBischoffQuota(ballots.size(), seatCount);
       System.out.format("Quota: %1$.2f\n", quota);
 
@@ -532,6 +519,23 @@ public class BallotCounter {
    */
   public static double getHagenbachBischoffQuota(int ballotCount, int seatCount) {
     return (double) ballotCount / (seatCount + 1);
+  }
+
+  private static List<LinkedHashSet<Candidate>> getNonExhaustedBallots(
+          List<LinkedHashSet<Candidate>> rankedBallots, Set<Candidate> excluded) {
+    List<LinkedHashSet<Candidate>> ballots = new ArrayList<>(rankedBallots.size());
+    for (LinkedHashSet<Candidate> rankedBallot : rankedBallots) {
+      // STV requires that blank ballots not be counted, so as not to affect the
+      // quota.
+      for (Candidate c : rankedBallot) {
+        if (!excluded.contains(c)) {
+          // Wright System 2.1(a)
+          ballots.add(rankedBallot);
+          break;
+        }
+      }
+    }
+    return ballots;
   }
 
   /**
